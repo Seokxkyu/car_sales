@@ -14,9 +14,9 @@ intern/
 
 ## 사용법
 ### 1. Powershell 관리자 권한으로 실행
-### 2. intern 폴더 진입
+### 2. intern/car_sales 폴더 진입
 ```bash
-cd intern
+cd intern/car_sales
 ```
 ### 3. 미국 업데이트
 ```bash
