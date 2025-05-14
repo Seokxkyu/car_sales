@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse
-from datetime import datetime
 import os
+from datetime import datetime
 
 import pandas as pd
 import requests
@@ -79,6 +79,15 @@ def fetch_china_sales(ym: str, url: str) -> pd.DataFrame:
     df.columns = [month_ts]
     return df
 
+def normalize_columns_to_date(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    df.columns에 섞여 있는 str, datetime, Timestamp 형식을 모두 YYYY-MM-DD datetime 으로 변환
+    """
+    dates = pd.to_datetime(df.columns, errors='coerce')
+    dates = dates.normalize()
+    df.columns = dates
+    return df
+
 def update_china_sales_only(excel_path: str, ym: str, url: str, sheet_name: str = "Brands"):
     """
     :param excel_path: 업데이트할 Excel 파일 경로
@@ -90,12 +99,14 @@ def update_china_sales_only(excel_path: str, ym: str, url: str, sheet_name: str 
         df_existing = pd.read_excel(
             excel_path, sheet_name=sheet_name, index_col=0, engine="openpyxl"
         )
+        df_existing = normalize_columns_to_date(df_existing)
     else:
         df_existing = pd.DataFrame()
 
     new_df = fetch_china_sales(ym, url)
 
     df_combined = pd.concat([df_existing, new_df], axis=1)
+    df_combined = df_combined.loc[:, ~df_combined.columns.duplicated()]
 
     df_combined = df_combined.sort_index(axis=1)
 
@@ -117,7 +128,9 @@ def main():
 
     args = parser.parse_args()
     try:
-        update_china_sales_only(args.excel_file, args.year_month, args.url, args.sheet)
+        update_china_sales_only(
+            args.excel_file, args.year_month, args.url, args.sheet
+        )
     except Exception as e:
         print(f"❌ 업데이트 실패: {e}")
 

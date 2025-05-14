@@ -1,25 +1,69 @@
 #!/usr/bin/env python3
+
 import argparse
 from datetime import datetime
+import time
+import random
+import logging
+
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 import pandas as pd
 
+logging.basicConfig(
+    format="%(asctime)s %(levelname)s %(message)s",
+    level=logging.INFO
+)
+
 def fetch_us_sales():
+    HEADERS = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/115.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Referer": "https://www.goodcarbadcar.net/"
+    }
+
     url = "https://www.goodcarbadcar.net/2025-us-auto-sales-figures-by-brand-brand-rankings/"
-    resp = requests.get(url, timeout=10)
+
+    # Session + Retry
+    session = requests.Session()
+    session.headers.update(HEADERS)
+    retries = Retry(
+        total=5,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"]
+    )
+    adapter = HTTPAdapter(max_retries=retries)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+
+    time.sleep(random.uniform(1.0, 3.0))
+
+    resp = session.get(url, timeout=10)
     resp.raise_for_status()
+
     soup = BeautifulSoup(resp.text, "lxml")
     table = soup.find("table", id="table_6")
     if table is None:
         raise RuntimeError("🚨 could not find table_6")
 
     rows = table.find_all("tr", attrs={"data-row-index": True})
-    data = [[td.get_text(strip=True).replace(",", "") for td in tr.find_all("td")] for tr in rows]
+    data = [
+        [td.get_text(strip=True).replace(",", "") for td in tr.find_all("td")]
+        for tr in rows
+    ]
     cols = ["Brand","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
     df = pd.DataFrame(data, columns=cols)
     for m in cols[1:]:
         df[m] = df[m].astype(int)
+
     return df
 
 def fetch_current_year_sales(year: int = 2025):
