@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-
+import os
 import argparse
-from datetime import datetime
 import time
 import random
 import logging
+from datetime import datetime
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -12,10 +12,15 @@ from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 import pandas as pd
 
+# base directory and data directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, 'data')
+
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(message)s",
     level=logging.INFO
 )
+
 
 def fetch_us_sales():
     HEADERS = {
@@ -31,7 +36,6 @@ def fetch_us_sales():
 
     url = "https://www.goodcarbadcar.net/2025-us-auto-sales-figures-by-brand-brand-rankings/"
 
-    # Session + Retry
     session = requests.Session()
     session.headers.update(HEADERS)
     retries = Retry(
@@ -66,6 +70,7 @@ def fetch_us_sales():
 
     return df
 
+
 def fetch_current_year_sales(year: int = 2025):
     df = fetch_us_sales()
     month_map = {
@@ -77,9 +82,16 @@ def fetch_current_year_sales(year: int = 2025):
     }
     return df.rename(columns=month_map)
 
-def update_2025_sales_only(excel_path: str, sheet_name: str = "Brands"):
+
+def update_2025_sales_only(excel_file_arg: str, sheet_name: str = "Brands"):
+    # resolve path
+    if os.path.isabs(excel_file_arg):
+        excel_path = excel_file_arg
+    else:
+        excel_path = os.path.join(DATA_DIR, excel_file_arg)
+
     existing = pd.read_excel(excel_path, sheet_name=sheet_name, engine="openpyxl", dtype=str)
-    existing = existing.rename(columns={existing.columns[0]:"Automaker", existing.columns[1]:"Brand"})
+    existing = existing.rename(columns={existing.columns[0]: "Automaker", existing.columns[1]: "Brand"})
     existing.columns = [
         pd.to_datetime(c) if isinstance(c, datetime) else c
         for c in existing.columns
@@ -97,15 +109,16 @@ def update_2025_sales_only(excel_path: str, sheet_name: str = "Brands"):
     with pd.ExcelWriter(excel_path, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
         existing.to_excel(writer, sheet_name=sheet_name, index=False)
 
+
 def main():
     parser = argparse.ArgumentParser(description="Excel 파일의 'Brands' 시트를 2025년 데이터로 덮어씌웁니다.")
-    parser.add_argument("excel_file", help="업데이트할 Excel 파일 경로")
+    parser.add_argument("excel_file", help="data 폴더 내 파일명 또는 절대경로")
     parser.add_argument("-s", "--sheet", default="Brands", help="대상 시트 이름 (기본: Brands)")
     args = parser.parse_args()
 
     try:
         update_2025_sales_only(args.excel_file, args.sheet)
-        print(f"✅ '{args.excel_file}' 의 '{args.sheet}' 시트를 2025년 데이터로 업데이트했습니다.")
+        print(f"✅ '{args.excel_file}' 업데이트 완료")
     except Exception as e:
         print(f"❌ 업데이트 실패: {e}")
 
