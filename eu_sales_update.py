@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import os
 import argparse
 import calendar
@@ -10,7 +11,9 @@ from openpyxl import load_workbook
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PDF_DIR = os.path.join(BASE_DIR, 'acea_pdfs')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
+
 os.makedirs(PDF_DIR, exist_ok=True)
+
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 def fetch_europe_pdf(year_month: str, url: str) -> str:
@@ -49,7 +52,6 @@ def update_europe_sales_only(
     url: str,
     sheet_name: str = None
 ):
-    # Excel 경로 결정
     if os.path.isabs(excel_file_arg):
         excel_path = excel_file_arg
     else:
@@ -57,17 +59,16 @@ def update_europe_sales_only(
 
     pdf_file = fetch_europe_pdf(year_month, url)
     df6 = parse_europe_page6(pdf_file)
-
     target_sheet = sheet_name or year_month
-    mode = 'a' if os.path.exists(excel_path) else 'w'
 
-    with pd.ExcelWriter(
-        excel_path,
-        engine='openpyxl',
-        mode=mode,
-        if_sheet_exists='new'
-    ) as writer:
+    mode = 'a' if os.path.exists(excel_path) else 'w'
+    writer_kwargs = {'engine': 'openpyxl', 'mode': mode}
+    if mode == 'a':
+        writer_kwargs['if_sheet_exists'] = 'new'
+
+    with pd.ExcelWriter(excel_path, **writer_kwargs) as writer:
         df6.to_excel(writer, sheet_name=target_sheet, index=False)
+
     print(f"✅ '{excel_path}' 에 시트 '{target_sheet}' 추가 완료!")
 
 def main():
@@ -93,7 +94,6 @@ def main():
         help='시트 이름 (기본: YYYY-MM)'
     )
     args = parser.parse_args()
-
     try:
         update_europe_sales_only(
             args.excel_file,
