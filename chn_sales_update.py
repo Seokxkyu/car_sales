@@ -9,12 +9,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 
 brand_map = {
-    '比亚迪':'BYD','大众':'Volkswagen','吉利':'Geely','丰田':'Toyota','奇瑞':'Chery',
+    '比亚迪':'BYD','大众':'VW','吉利':'Geely','丰田':'Toyota','奇瑞':'Chery',
     '长安':'Changan','本田':'Honda','特斯拉':'Tesla','奥迪':'Audi','五菱':'Wuling',
     '五菱（银标）':'Wuling (Silver)','捷途':'Jetour','奔驰':'Benz','哈弗':'Haval',
     'MG':'MG','宝马':'BMW','银河':'GALAXY','日产':'Nissan','红旗':'Hongqi',
     '零跑':'Leapmotor','理想':'LI','别克':'Buick','小鹏':'XPENG','传祺':'GAC Trumpchi',
-    '小米':'XIAOMI','领克':'Lynk & CO','埃安':'Aion','起亚':'Kia','荣威':'Roewe',
+    '小米':'XIAOMI','领克':'Lynk&CO','埃安':'Aion','起亚':'Kia','荣威':'Roewe',
     '坦克':'TANK','现代':'Hyundai'
 }
 
