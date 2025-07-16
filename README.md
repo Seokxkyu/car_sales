@@ -20,6 +20,7 @@ intern/
 cd intern/car_sales
 ```
 ### 3. 미국 업데이트
+**실행 방법**
 ```bash
 python us_sales_update.py <OUTPUT_XLSX_PATH> --sheet <SHEET_NAME>
 ```
@@ -33,6 +34,7 @@ python us_sales_update.py <OUTPUT_XLSX_PATH> --sheet <SHEET_NAME>
 
 
 ### 4. 중국 업데이트
+**실행 방법**
 ```bash
 python chn_sales_update.py <OUTPUT_XLSX_PATH> <YYYY-MM> <GASGOO_URL> --sheet <SHEET_NAME>
 ```
@@ -48,15 +50,23 @@ python chn_sales_update.py <OUTPUT_XLSX_PATH> <YYYY-MM> <GASGOO_URL> --sheet <SH
 
 
 ### 5. 유럽 업데이트
+`Camelot` 라이브러리 사용을 위해 Python 3.11 환경 진입 필요
 ```bash
-python eu_sales_update.py <OUTPUT_XLSX_PATH> <YYYY-MM> <PDF_URL> --sheet <SHEET_NAME>
-```
-- `OUTPUT_XLSX_PATH`: 업데이트 하고자 하는 엑셀 파일 
-- `--sheet`: Sheet 이름
-- `<YYYY-MM>`: 연도-월
-- `<PDF_URL>`: [ACEA 유럽 전 자동차 브랜드 판매 순위 포스트](https://www.acea.auto/nav/?content=press-releases)
+# 가상환경 설정
+C:\Users\rootn\AppData\Local\Programs\Python\Python311\python.exe -m venv myenv311
 
-- **예시** (2025년 3월 업데이트 → 별도 시트에 추가)
+# 가상환경 진입
+.\myenv311\Scripts\activate.ps1
+```
+
+**실행 방법**
+```bash
+python eu_sales_update.py <PDF_URL> <YYYY-MM>
+```
+- `<PDF_URL>`: [ACEA 유럽 전 자동차 브랜드 판매 순위 포스트](https://www.acea.auto/nav/?content=press-releases)
+- `<YYYY-MM>`: 연도-월
+
+- **예시** (2025년 5월)
     ```bash
-    python eu_sales_update.py "europe_sales_update.xlsx" 2025-03 https://www.acea.auto/files/Press_release_car_registrations_March_2025.pdf --sheet 2025-03
+    python eu_sales_update.py https://www.acea.auto/files/Press_release_car_registrations_May_2025.pdf 2025-05
     ```
