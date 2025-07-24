@@ -1,12 +1,15 @@
-#!/usr/bin/env python3
-import argparse
 import os
+import argparse
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+from openpyxl import load_workbook, Workbook
+from openpyxl.styles import Alignment, Font
+from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
+EXCEL_FILE = os.path.join(DATA_DIR, 'china_sales_update.xlsx')
 
 brand_map = {
     '比亚迪':'BYD','大众':'VW','吉利':'Geely','丰田':'Toyota','奇瑞':'Chery',
@@ -43,39 +46,49 @@ def fetch_china_sales(ym, url):
     if not records:
         raise RuntimeError(f"{ym} 데이터가 없습니다")
     df = pd.DataFrame(records).set_index('Brand')
-    df.columns = [pd.to_datetime(f"{ym}-01").normalize()]
+    month_date = pd.to_datetime(f"{ym}-01").normalize()
+    df.columns = [month_date]
     return df
 
-def normalize_columns_to_date(df):
-    df.columns = pd.to_datetime(df.columns, errors='coerce').normalize()
-    return df
-
-def update_china_sales_only(excel_file_arg, ym, url, sheet_name='Brands'):
-    if os.path.isabs(excel_file_arg):
-        excel_path = excel_file_arg
-    else:
-        excel_path = os.path.join(DATA_DIR, excel_file_arg)
-    if os.path.exists(excel_path):
-        df_existing = pd.read_excel(excel_path, sheet_name=sheet_name, index_col=0, engine='openpyxl')
-        df_existing = normalize_columns_to_date(df_existing)
-    else:
-        df_existing = pd.DataFrame()
+def update_china_sales(ym, url, sheet_name='Brands'):
     new_df = fetch_china_sales(ym, url)
-    df_combined = pd.concat([df_existing, new_df], axis=1)
-    df_combined = df_combined.loc[:, ~df_combined.columns.duplicated()]
-    df_combined = df_combined.sort_index(axis=1)
-    df_combined.to_excel(excel_path, sheet_name=sheet_name)
-    print(f"'{excel_path}' 업데이트 완료")
+    date = new_df.columns[0]
+    os.makedirs(DATA_DIR, exist_ok=True)
+    if os.path.exists(EXCEL_FILE):
+        wb = load_workbook(EXCEL_FILE)
+        ws = wb[sheet_name] if sheet_name in wb.sheetnames else wb.create_sheet(sheet_name)
+    else:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = sheet_name
+    # 첫 열 Brand 헤더
+    if ws.cell(row=1, column=1).value is None:
+        ws.cell(row=1, column=1, value='Brand')
+    # 새 컬럼 인덱스 및 헤더 설정
+    new_col = ws.max_column + 1
+    header_cell = ws.cell(row=1, column=new_col, value=date.strftime('%Y-%m'))
+    header_cell.alignment = Alignment(horizontal='center')
+    header_cell.font = Font(bold=True)
+    # 기존 브랜드 매핑
+    brand_rows = { ws.cell(row=r, column=1).value: r for r in range(2, ws.max_row+1) }
+    # 데이터 입력 및 숫자 포맷
+    for brand, sales in new_df[date].items():
+        row = brand_rows.get(brand, ws.max_row+1)
+        if brand not in brand_rows:
+            ws.cell(row=row, column=1, value=brand)
+        cell = ws.cell(row=row, column=new_col, value=sales)
+        cell.number_format = '#,###,###'
+    ws.freeze_panes = 'B2'
+    wb.save(EXCEL_FILE)
+    print(f"'{EXCEL_FILE}' 업데이트 완료")
 
 def main():
     parser = argparse.ArgumentParser(prog='chn_sales_update', description='중국 자동차 판매 업데이트')
-    parser.add_argument('excel_file', help='data 폴더 내 파일명 또는 절대경로')
     parser.add_argument('year_month', help='YYYY-MM')
     parser.add_argument('url', help='스크래핑 URL')
-    parser.add_argument('-s', '--sheet', default='Brands', help='시트 이름')
     args = parser.parse_args()
     try:
-        update_china_sales_only(args.excel_file, args.year_month, args.url, args.sheet)
+        update_china_sales(args.year_month, args.url)
     except Exception as e:
         print(f"업데이트 실패: {e}")
 
