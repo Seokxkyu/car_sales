@@ -1,6 +1,4 @@
-#!/usr/bin/env python3
 import os
-import argparse
 import time
 import random
 import logging
@@ -10,19 +8,23 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
+from openpyxl import load_workbook
+from openpyxl.styles import Alignment, Font
 import pandas as pd
 
-# base directory and data directory
+# 설정
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
+EXCEL_FILE = os.path.join(DATA_DIR, 'us_sales_update.xlsx')
+SHEET_NAME = 'Brands'
+CURRENT_YEAR = datetime.now().year
+MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
 
-logging.basicConfig(
-    format="%(asctime)s %(levelname)s %(message)s",
-    level=logging.INFO
-)
+logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
 
 
 def fetch_us_sales():
+    """GOODCARBADCAR에서 US 자동차 월별 판매량 스크래핑 반환"""
     HEADERS = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -33,94 +35,77 @@ def fetch_us_sales():
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Referer": "https://www.goodcarbadcar.net/"
     }
-
-    url = "https://www.goodcarbadcar.net/2025-us-auto-sales-figures-by-brand-brand-rankings/"
-
+    url = f"https://www.goodcarbadcar.net/{CURRENT_YEAR}-us-auto-sales-figures-by-brand-brand-rankings/"
     session = requests.Session()
     session.headers.update(HEADERS)
-    retries = Retry(
-        total=5,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["GET"]
-    )
-    adapter = HTTPAdapter(max_retries=retries)
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
+    retries = Retry(total=5, backoff_factor=1,
+                    status_forcelist=[429,500,502,503,504],
+                    allowed_methods=["GET"])
+    session.mount("https://", HTTPAdapter(max_retries=retries))
+    session.mount("http://", HTTPAdapter(max_retries=retries))
 
+    # 랜덤 딜레이
     time.sleep(random.uniform(1.0, 3.0))
-
     resp = session.get(url, timeout=10)
     resp.raise_for_status()
 
     soup = BeautifulSoup(resp.text, "lxml")
     table = soup.find("table", id="table_6")
     if table is None:
-        raise RuntimeError("🚨 could not find table_6")
+        raise RuntimeError("🚨 could not find US sales table")
 
     rows = table.find_all("tr", attrs={"data-row-index": True})
-    data = [
-        [td.get_text(strip=True).replace(",", "") for td in tr.find_all("td")]
-        for tr in rows
-    ]
-    cols = ["Brand","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-    df = pd.DataFrame(data, columns=cols)
-    for m in cols[1:]:
+    data = [[td.get_text(strip=True).replace(",", "") for td in tr.find_all("td")] for tr in rows]
+    df = pd.DataFrame(data, columns=["Brand"] + MONTH_ABBR)
+    for m in MONTH_ABBR:
         df[m] = df[m].astype(int)
-
-    return df
-
-
-def fetch_current_year_sales(year: int = 2025):
-    df = fetch_us_sales()
-    month_map = {
-        m: pd.to_datetime(f"{year}-{i:02d}-01")
-        for i, m in enumerate(
-            ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
-            start=1
-        )
-    }
-    return df.rename(columns=month_map)
+    return df.set_index('Brand')
 
 
-def update_2025_sales_only(excel_file_arg: str, sheet_name: str = "Brands"):
-    # resolve path
-    if os.path.isabs(excel_file_arg):
-        excel_path = excel_file_arg
-    else:
-        excel_path = os.path.join(DATA_DIR, excel_file_arg)
+def update_us_sales():
+    """openpyxl로 기존 시트 손상 없이 CURRENT_YEAR 전체 월 데이터를 삭제 후 덮어쓰기"""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    sales_df = fetch_us_sales()
 
-    existing = pd.read_excel(excel_path, sheet_name=sheet_name, engine="openpyxl", dtype=str)
-    existing = existing.rename(columns={existing.columns[0]: "Automaker", existing.columns[1]: "Brand"})
-    existing.columns = [
-        pd.to_datetime(c) if isinstance(c, datetime) else c
-        for c in existing.columns
-    ]
-    existing.set_index("Brand", inplace=True)
+    wb = load_workbook(EXCEL_FILE)
+    ws = wb[SHEET_NAME]
 
-    new_df = fetch_current_year_sales().set_index("Brand")
-    for month_ts in new_df.columns:
-        existing[month_ts] = new_df[month_ts].astype(int)
+    # 브랜드-행 매핑 (Brand은 열 B)
+    brand_rows = {ws.cell(row=r, column=2).value: r for r in range(2, ws.max_row+1) if ws.cell(row=r, column=2).value}
 
-    existing = existing.reset_index()
-    cols_order = ["Automaker","Brand"] + [c for c in existing.columns if isinstance(c, pd.Timestamp)]
-    existing = existing[cols_order]
+    # Jan~Dec 순서로 처리: 기존 컬럼 삭제 후 새로 추가
+    for idx, month_abbr in enumerate(MONTH_ABBR, start=1):
+        header = f"{CURRENT_YEAR}-{idx:02d}"
+        logging.info(f"Updating month '{month_abbr}' as header '{header}'")
+        # 기존 컬럼 삭제
+        delete_col = None
+        for c in range(3, ws.max_column+1):
+            if ws.cell(row=1, column=c).value == header:
+                delete_col = c
+                break
+        if delete_col:
+            ws.delete_cols(delete_col)
+            logging.info(f"Deleted existing column '{header}' at {delete_col}")
+        # 새로운 컬럼 추가
+        new_col = ws.max_column + 1
+        hcell = ws.cell(row=1, column=new_col, value=header)
+        hcell.alignment = Alignment(horizontal='center')
+        hcell.font = Font(bold=True)
+        # 값 작성
+        for brand, sales in sales_df[month_abbr].items():
+            row = brand_rows.get(brand)
+            if not row:
+                row = ws.max_row + 1
+                ws.cell(row=row, column=2, value=brand)
+                brand_rows[brand] = row
+            vcell = ws.cell(row=row, column=new_col, value=sales)
+            vcell.number_format = '#,###,###'
 
-    with pd.ExcelWriter(excel_path, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-        existing.to_excel(writer, sheet_name=sheet_name, index=False)
+    # 틀 고정 (C2)
+    ws.freeze_panes = 'C2'
+    wb.save(EXCEL_FILE)
+    logging.info(f"✅ '{EXCEL_FILE}' 업데이트 완료")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Excel 파일의 'Brands' 시트를 2025년 데이터로 덮어씌웁니다.")
-    parser.add_argument("excel_file", help="data 폴더 내 파일명 또는 절대경로")
-    parser.add_argument("-s", "--sheet", default="Brands", help="대상 시트 이름 (기본: Brands)")
-    args = parser.parse_args()
-
-    try:
-        update_2025_sales_only(args.excel_file, args.sheet)
-        print(f"✅ '{args.excel_file}' 업데이트 완료")
-    except Exception as e:
-        print(f"❌ 업데이트 실패: {e}")
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    update_us_sales()

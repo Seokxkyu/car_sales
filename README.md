@@ -22,14 +22,12 @@ cd intern/car_sales
 ### 3. 미국 업데이트
 **실행 방법**
 ```bash
-python us_sales_update.py <OUTPUT_XLSX_PATH> --sheet <SHEET_NAME>
+python us_sales_update.py
 ```
-- `OUTPUT_XLSX_PATH`: 업데이트 하고자 하는 엑셀 파일 
-- `SHEET_NAME`: Sheet 이름
 - **예시** (매 월 동일)
 
     ```bash
-    python us_sales_update.py "us_sales_update.xlsx" --sheet Brands
+    python us_sales_update.py
     ```
 
 
